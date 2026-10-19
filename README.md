@@ -1,37 +1,37 @@
 # A marketplace payment receipt with a clear handoff
 
-The example models one paid order from a solo seller's point of view. It builds a small HTML receipt, asks Infrai to turn it into a PDF with one key, then returns the buyer update and the fulfillment handoff together. The code is intentionally ordinary Python so the business decision is easy to copy.
+This example models a single paid order from a solo seller's perspective. We build a tiny HTML receipt, then ask Infrai to convert it to PDF with one key, and hand back the buyer message plus fulfillment note in one go. I kept the Python deliberately boring so you can lift the logic straight into prod.
 
 ## The decision in code
 
-`PaymentOrder` is the boundary: seller, buyer, item, amount, and order id. `issue_receipt` refuses to run without `INFRAI_API_KEY`, sends an explicit `POST` request, and keeps the generated PDF beside the two messages that follow payment. A client-supplied idempotency key makes a retry refer to the same receipt request.
+`PaymentOrder` marks the seam: seller, buyer, item, amount, order id. `issue_receipt` won't execute unless `INFRAI_API_KEY` is present, fires a clear `POST` call, and stashes the PDF next to the two post-payment messages. Pass an idempotency key from the client so a retry hits the same receipt job.
 
-The response is decoded as `{ok, data, error, metadata}` before the HTTP status is interpreted. Business rejection becomes `InfraiError`; a 429 waits using `Retry-After` when provided and otherwise uses exponential backoff.
+We decode the response as `{ok, data, error, metadata}` before checking HTTP status. A business decline maps to `InfraiError`; on 429 we honor `Retry-After` if given, else fall back to exponential backoff.
 
 ## Run the focused test
 
-From this directory:
+Run from this folder:
 
 ```bash
 python3 -m pytest -q
 ```
 
-The test supplies a deterministic PDF response and checks the real business result: the order id reaches the receipt, the buyer receives a ready message, and fulfillment receives the handoff text.
+The test mocks a fixed PDF and asserts the actual business outcome: order id lands on the receipt, buyer gets a ready note, fulfillment gets the handoff copy.
 
 ## Try the live request
 
-Export `INFRAI_API_KEY`, then run:
+Set `INFRAI_API_KEY` in your env, then run:
 
 ```bash
 export INFRAI_API_KEY=your-key
 python3 run_receipt.py
 ```
 
-The script prints the stored receipt data and both downstream messages. Infrai is called through the plain REST endpoint `POST /v1/pdf/generate`; no SDK is needed.
+It prints the saved receipt payload and both follow-up messages. Infrai is called through the plain REST endpoint `POST /v1/pdf/generate`; no SDK is needed.
 
 ## Why this shape
 
-I kept the workflow in one module because a marketplace receipt has one important boundary: payment is complete only when the artifact, buyer update, and order handoff agree on the same order id. The service stops there. A real application can persist `ReceiptResult` in its own order system.
+I left the flow in a single module because a marketplace receipt hinges on one boundary: payment counts as done only when the PDF, buyer note, and handoff share the same order id. The service ends there. Your real app can store `ReceiptResult` in its own order table.
 
 ## License
 
